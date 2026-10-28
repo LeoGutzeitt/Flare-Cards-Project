@@ -1,4 +1,5 @@
-import { pokemonCollections, findCollection, collectionFor } from './pokemon-collections.js';
+import {languageBadge} from './card-languages.js';
+import { collectionFor } from './pokemon-collections.js';
 import { AUCTION_KEY, createAuctionStore, minimumBid } from './auction-store.js';
 import { createAuth, ACCOUNTS_KEY } from './auth.js';
 import { connectAuctionBackend } from './auction-backend.js';
@@ -9,31 +10,14 @@ let backend, backendError;
 try { backend = await connectAuctionBackend(); } catch { backendError = 'Não foi possível conectar ao Supabase. Confira a configuração e recarregue a página.'; }
 const auth = backend?.auth || createAuth(localStorage, sessionStorage);
 const $ = selector => document.querySelector(selector);
-$('#admin-collection').insertAdjacentHTML('beforeend', pokemonCollections.map(set => `<option value="${set.id}">${set.name} — ${set.series || set.id}</option>`).join(''));
-function previewCollection() {
-  const set = findCollection($('#admin-collection').value), img = $('#admin-collection-logo');
-  img.hidden = !set?.logo;
-  if (set?.logo) img.src = set.logo;
-  $('#admin-collection-info').textContent = set ? `${set.series || ''} · ${set.cards} cartas${set.logo ? '' : ' · Logo ainda não disponível no catálogo'}` : 'Selecione para ver a logo da coleção.';
-}
-$('#admin-collection-logo').addEventListener('error', () => { $('#admin-collection-logo').hidden = true; $('#admin-collection-info').textContent += ' · Logo indisponível no momento'; });
-$('#admin-collection').addEventListener('change', previewCollection);
-$('#admin-form').addEventListener('reset', () => queueMicrotask(previewCollection));
 const money = cents => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const date = time => new Date(time).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
 const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let store, auctions = [], selectedId, historyId;
-let uploadedImage;
-let imageRequest = 0;
 let activeView = 'browse';
 let openedCategory = null, animateCategoryCard = false, animateSectionOpen = false;
 const categoryCards = new Map();
-function resetPhoto() {
-  imageRequest++; uploadedImage = undefined; $('#admin-image').value = '';
-  $('#admin-image').required = !$('#admin-lot').value;
-  $('#admin-image-preview').hidden = true; $('#admin-image-preview').removeAttribute('src'); $('#admin-image-status').textContent = '';
-}
 try { if (backendError) throw new Error(backendError); store = backend?.store || createAuctionStore(localStorage, () => Date.now(), role => auth.requireUser(role)); auctions = await store.list(); }
 catch (error) { $('#auction-status').textContent = error.message; }
 function remaining(end) {
@@ -67,7 +51,7 @@ function render() {
   const card = item => {
     if (item.example) return `<article class="product auction-card example-card" data-example="${item.id}"><div class="card-image"><span class="rank">EXEMPLO ILUSTRATIVO</span><img src="${item.image}" alt="${escape(item.name)} — exemplo de ${escape(item.collection)}" draggable="false"></div><div class="card-content"><img class="example-set-logo" src="${item.setLogo}" alt="Logo original da coleção"><p class="eyebrow">UM POUCO DE INSPIRAÇÃO</p><h3>${item.name}</h3><p>${item.collection}</p><p class="example-description">Uma prévia do que você pode encontrar nesta seção. Quando um lote real for cadastrado, ele aparecerá aqui com foto, prazo e lances.</p><span class="example-label">Exemplo visual · sem lances</span><p class="catalog-note">Imagem de catálogo via TCGdex.</p></div></article>`;
     const ended = Date.now() >= item.endsAt, latest = item.bids.at(-1);
-    return `<article class="product auction-card" data-ended="${ended}" data-auction="${item.id}"><div class="card-image"><span class="rank">LOTE ${String(auctions.indexOf(item) + 1).padStart(3, '0')} / ${ended ? 'ENCERRADO' : 'EM ANDAMENTO'}</span><img src="${escape(item.image)}" alt="Carta ${escape(item.name)}" loading="lazy"></div><div class="card-content"><h3>${escape(item.name)}</h3><p>${escape(item.collection)}</p><div class="auction-clock ${ended ? 'ended' : ''}"><span>${ended ? 'Leilão encerrado' : 'Encerra em'}</span><strong data-clock="${item.id}" aria-label="Tempo restante">${ended ? 'Encerrado' : remaining(item.endsAt)}</strong><small>Encerramento: ${date(item.endsAt)} · Brasília</small></div><div class="auction-value"><span>${latest ? 'Maior lance' : 'Lance inicial'}</span><strong>${money(latest?.amount ?? item.opening)}</strong></div><div class="auction-leader">${latest ? `${ended ? 'Líder ao encerrar' : 'Na liderança'}: <strong>${escape(latest.bidder)}</strong>` : (ended ? 'Este leilão terminou sem lances.' : 'Seja o primeiro a dar um lance.')}</div><p class="auction-minimum">Incremento mínimo: ${money(item.increment)}${ended ? '' : `<br>Próximo lance: ${money(minimumBid(item))}`}</p><button class="button" data-bid="${item.id}" ${ended ? 'disabled' : ''}>${ended ? 'Leilão encerrado' : 'Dar lance ↗'}</button><button class="history-button" data-history="${item.id}">Ver histórico · ${item.bids.length} lance${item.bids.length === 1 ? '' : 's'}</button></div></article>`;
+    return `<article class="product auction-card" data-ended="${ended}" data-auction="${item.id}"><div class="card-image"><span class="rank">LOTE ${String(auctions.indexOf(item) + 1).padStart(3, '0')} / ${ended ? 'ENCERRADO' : 'EM ANDAMENTO'}</span><img src="${escape(item.image)}" alt="Carta ${escape(item.name)}" loading="lazy"></div><div class="card-content"><h3>${escape(item.name)}</h3><p>${languageBadge(item.language)} · ${escape(item.collection)}${item.number?' · '+escape(item.number):''}</p><div class="auction-clock ${ended ? 'ended' : ''}"><span>${ended ? 'Leilão encerrado' : 'Encerra em'}</span><strong data-clock="${item.id}" aria-label="Tempo restante">${ended ? 'Encerrado' : remaining(item.endsAt)}</strong><small>Encerramento: ${date(item.endsAt)} · Brasília</small></div><div class="auction-value"><span>${latest ? 'Maior lance' : 'Lance inicial'}</span><strong>${money(latest?.amount ?? item.opening)}</strong></div><div class="auction-leader">${latest ? `${ended ? 'Líder ao encerrar' : 'Na liderança'}: <strong>${escape(latest.bidder)}</strong>` : (ended ? 'Este leilão terminou sem lances.' : 'Seja o primeiro a dar um lance.')}</div><p class="auction-minimum">Incremento mínimo: ${money(item.increment)}${ended ? '' : `<br>Próximo lance: ${money(minimumBid(item))}`}</p><button class="button" data-bid="${item.id}" ${ended ? 'disabled' : ''}>${ended ? 'Leilão encerrado' : 'Dar lance ↗'}</button><button class="history-button" data-history="${item.id}">Ver histórico · ${item.bids.length} lance${item.bids.length === 1 ? '' : 's'}</button></div></article>`;
   };
   const categories = auctionCategories.filter(category => category.id !== 'other' || shown.some(item => auctionCategory(item) === category.id));
   const category = categories.find(item => item.id === openedCategory);
@@ -189,89 +173,38 @@ function setAuthMode(mode) {
   $('#auth-password').minLength = mode === 'login' ? 1 : 8;
   $('#auth-email').type = mode === 'login' ? 'text' : 'email';
   $('#auth-email-label').textContent = mode === 'login' ? 'Usuário ou e-mail' : 'E-mail';
-  $('#auth-submit').textContent = mode === 'login' ? 'Entrar' : mode === 'setup' ? 'Criar administrador local' : 'Criar conta de usuário';
-  $('#auth-description').textContent = mode === 'setup' ? 'Configure o primeiro administrador desta demonstração. Esta opção deixa de aparecer após a configuração; não há promoção de usuários para admin.' : mode === 'register' ? 'Novas contas têm permissão de usuário para participar dos leilões.' : 'Entre como administrador para gerenciar ou como usuário para dar lances.';
-  $('#setup-admin').hidden = auth.hasAdmin();
+  $('#auth-submit').textContent = mode === 'login' ? 'Entrar' : 'Criar conta de usuário';
+
+  $('#auth-description').textContent = 'Entre com sua conta de cliente para participar dos leilões.';
 }
 function renderSession() {
   const user = auth.currentUser();
-  $('#session-name').textContent = user ? `${user.name} · ${user.role === 'admin' ? 'Admin' : 'Usuário'}` : '';
+  $('#session-name').textContent = user ? `${user.name} · Usuário` : '';
   $('#open-login').hidden = !!user; $('#logout').hidden = !user;
   $('#welcome-login').textContent = user ? 'Meu acompanhamento ↗' : 'Entrar para participar';
-  $('#add-tab').hidden = user?.role !== 'admin';
-  $('#admin-panel').hidden = user?.role !== 'admin' || activeView !== 'add';
-  if (user?.role !== 'admin' && activeView === 'add') selectView('browse');
-  $('#remote-actions').hidden = !backend || user?.role !== 'admin';
-  if (user?.role === 'admin') {
-    const select = $('#admin-lot'), selected = select.value;
-    select.innerHTML = '<option value="">Cadastrar novo leilão</option>' + auctions.filter(item => !item.bids.length && Date.now() < item.endsAt).map(item => `<option value="${item.id}">${escape(item.name)}</option>`).join('');
-    select.value = selected;
-  }
+
 }
 $('#open-login').addEventListener('click', () => { setAuthMode('login'); $('#auth-dialog').showModal(); });
 $('#close-auth').addEventListener('click', () => $('#auth-dialog').close());
 document.querySelectorAll('[data-auth-mode]').forEach(button => button.addEventListener('click', () => setAuthMode(button.dataset.authMode)));
-$('#logout').addEventListener('click', async () => { try { await auth.logout(); $('#bid-dialog').close(); $('#admin-form').reset(); resetPhoto(); for (const field of ['name']) $('#admin-' + field).disabled = false; selectView('browse'); render(); await renderDashboard(); $('#auction-status').textContent = 'Você saiu da conta.'; } catch(error) { $('#auction-status').textContent = error.message; } });
+$('#logout').addEventListener('click', async () => { try { await auth.logout(); $('#bid-dialog').close(); selectView('browse'); render(); await renderDashboard(); $('#auction-status').textContent = 'Você saiu da conta.'; } catch(error) { $('#auction-status').textContent = error.message; } });
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault(); $('#auth-submit').disabled = true; $('#auth-error').textContent = '';
   try {
     if (authMode === 'login') await auth.login($('#auth-email').value, $('#auth-password').value);
-    else await auth.register({ name: $('#auth-name').value, email: $('#auth-email').value, password: $('#auth-password').value }, authMode === 'setup');
+    else await auth.register({ name: $('#auth-name').value, email: $('#auth-email').value, password: $('#auth-password').value });
     $('#auth-form').reset(); $('#auth-dialog').close(); refresh(); $('#auction-status').textContent = 'Login realizado. Sua conta está pronta para continuar.';
   } catch (error) { $('#auth-error').textContent = error.message; }
   finally { $('#auth-submit').disabled = false; }
 });
-$('#admin-lot').addEventListener('change', () => {
-  const item = auctions.find(item => item.id === $('#admin-lot').value);
-  resetPhoto();
-  for (const field of ['name']) $('#admin-' + field).disabled = !!item;
-  if (!item) { $('#admin-form').reset(); return; }
-  $('#admin-category').value = auctionCategory(item);
-  $('#admin-name').value = item.name; $('#admin-collection').value = collectionFor(item)?.id || ''; previewCollection();
-  $('#admin-image-preview').src = item.image; $('#admin-image-preview').hidden = false;
-  $('#admin-image-status').textContent = 'Foto atual. Selecione outro arquivo para substituí-la antes do primeiro lance.';
-  $('#admin-opening').value = (item.opening / 100).toFixed(2); $('#admin-increment').value = (item.increment / 100).toFixed(2);
-  const local = new Date(item.endsAt - new Date(item.endsAt).getTimezoneOffset() * 60000); $('#admin-end').value = local.toISOString().slice(0,16);
-});
-$('#admin-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const submit = event.currentTarget.querySelector('button[type="submit"]'); submit.disabled = true;
-  try {
-    if ($('#admin-image').files.length && !uploadedImage) throw new Error('Aguarde a prévia da foto ou selecione uma imagem válida.');
-    const input = { category: $('#admin-category').value, name: $('#admin-name').value, collectionId: $('#admin-collection').value, collection: findCollection($('#admin-collection').value)?.name || '', ...(uploadedImage ? { image: uploadedImage } : {}), opening: Math.round(Number($('#admin-opening').value) * 100), increment: Math.round(Number($('#admin-increment').value) * 100), endsAt: new Date($('#admin-end').value).getTime() };
-    if ($('#admin-lot').value) await store.configure($('#admin-lot').value, input); else await store.create(input);
-    $('#admin-form').reset(); resetPhoto(); for (const field of ['name']) $('#admin-' + field).disabled = false;
-    await refresh(); $('#admin-status').textContent = backend ? 'Leilão publicado com sucesso.' : 'Leilão salvo com sucesso neste navegador.';
-  } catch (error) { $('#admin-status').textContent = error.message; }
-  finally { submit.disabled = false; }
-});
-$('#admin-image').addEventListener('change', async () => {
-  const file = $('#admin-image').files[0], request = ++imageRequest;
-  uploadedImage = undefined; $('#admin-image-preview').hidden = true;
-  $('#admin-image-status').textContent = '';
-  if (!file) return;
-  try {
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024 || !file.size) throw new Error('Selecione uma foto JPG, PNG ou WebP de até 2 MB.');
-    $('#admin-image-status').textContent = 'Carregando foto…';
-    const result = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Não foi possível ler esta foto.')); reader.readAsDataURL(file); });
-    const photo = new Image(); photo.src = result; await photo.decode();
-    if (request !== imageRequest) return;
-    uploadedImage = result; $('#admin-image-preview').src = result; $('#admin-image-preview').hidden = false;
-    $('#admin-image-status').textContent = 'Foto pronta. A imagem inteira será exibida no leilão.';
-  } catch (error) {
-    if (request !== imageRequest) return;
-    $('#admin-image').value = ''; $('#admin-image-status').textContent = error.message;
-  }
-});
 function selectView(view) {
-  if (view === 'add' && auth.currentUser()?.role !== 'admin') return;
+  if (!['browse', 'follow'].includes(view)) return;
   activeView = view;
   for (const tab of document.querySelectorAll('[data-auction-view]')) {
     const selected = tab.dataset.auctionView === view;
     tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1;
   }
   $('#auction-browse').hidden = view !== 'browse'; $('#auction-follow').hidden = view !== 'follow';
-  $('#admin-panel').hidden = view !== 'add' || auth.currentUser()?.role !== 'admin';
   if (view === 'follow') renderDashboard();
 }
 document.querySelectorAll('[data-auction-view]').forEach(tab => {
@@ -297,10 +230,10 @@ async function renderDashboard() {
     const data = backend ? await backend.dashboard() : { tickets: [], myAuctionIds: auctions.filter(lot => lot.bids.some(bid => bid.bidderId === user.id)).map(lot => lot.id) };
     if (request !== dashboardRequest || auth.currentUser()?.id !== user.id) return;
     dashboardTickets = data.tickets;
-    const followed = user.role === 'admin' ? auctions : auctions.filter(lot => data.myAuctionIds.includes(lot.id));
+    const followed = auctions.filter(lot => data.myAuctionIds.includes(lot.id));
     $('#dashboard-status').textContent = backend ? 'Resultados e notificações atualizados pelo Supabase.' : 'Demonstração local. O envio de e-mail e a emissão de tickets reais serão ativados ao conectar o Supabase.';
     const active = followed.filter(lot => Date.now() < lot.endsAt).length;
-    $('#dashboard-summary').innerHTML = `<div><strong>${active}</strong><span>em andamento</span></div><div><strong>${followed.length - active}</strong><span>encerrados</span></div><div><strong>${data.tickets.length}</strong><span>tickets ${user.role === 'admin' ? 'emitidos' : 'recebidos'}</span></div>`;
+    $('#dashboard-summary').innerHTML = `<div><strong>${active}</strong><span>em andamento</span></div><div><strong>${followed.length - active}</strong><span>encerrados</span></div><div><strong>${data.tickets.length}</strong><span>tickets recebidos</span></div>`;
     $('#followed-auctions').innerHTML = followed.length ? followed.map(lot => `<article class="followed-lot"><img src="${escape(lot.image)}" alt="Carta ${escape(lot.name)}"><div><h3>${escape(lot.name)}</h3><p>${Date.now() >= lot.endsAt ? 'Encerrado' : 'Em andamento'} · ${date(lot.endsAt)}</p><p>${lot.bids.length ? `Maior lance: ${money(lot.bids.at(-1).amount)} · ${escape(lot.bids.at(-1).bidder)}` : 'Ainda sem lances'}</p></div><button class="add" data-history="${lot.id}">Histórico</button></article>`).join('') : '<p class="catalog-note">Seus leilões aparecerão aqui após o primeiro lance.</p>';
     const states = { pending: 'Na fila', processing: 'Enviando', sent: 'Aceito pelo provedor', failed: 'Falha no envio' };
     $('#ticket-list').innerHTML = data.tickets.length ? data.tickets.map(ticket => `<article class="pickup-ticket"><div><p class="eyebrow">${ticket.redeemedAt ? 'RETIRADA CONFIRMADA' : 'TICKET DE RETIRADA'}</p><h3>${escape(ticket.card)}</h3><p>${escape(ticket.winner)} · ${money(ticket.amount)}</p><p class="catalog-note">E-mail: ${escape(ticket.email)} · ${states[ticket.emailStatus] || 'Pendente'}${ticket.attempts >= 8 && ticket.emailStatus !== 'sent' ? ' — limite de tentativas atingido' : ''}</p><code>${escape(ticket.code)}</code></div><button class="add" data-ticket="${ticket.id}">Baixar ticket ↓</button></article>`).join('') : '<p class="catalog-note">Nenhum ticket emitido. Após o encerramento, o processamento confirma o vencedor e prepara o e-mail.</p>';
@@ -311,20 +244,6 @@ $('#google-login').addEventListener('click', async () => {
   if (!backend) return;
   try { $('#google-login').disabled = true; await backend.auth.googleLogin(); }
   catch { $('#google-status').textContent = 'Não foi possível abrir o login Google. Tente novamente.'; $('#google-login').disabled = false; }
-});
-$('#process-auctions').addEventListener('click', async () => {
-  if (!backend) return;
-  $('#process-auctions').disabled = true;
-  try { const result = await backend.process(); await refresh(); $('#dashboard-status').textContent = result.pendingConfiguration ? 'Tickets processados. Configure o provedor de e-mail e as instruções de retirada para enviar.' : `${result.finalized} leilão(ões) processado(s), ${result.sent} e-mail(s) aceito(s) pelo provedor, ${result.failed || 0} falha(s).`; }
-  catch(error) { $('#dashboard-status').textContent = error.message; }
-  finally { $('#process-auctions').disabled = false; }
-});
-$('#redeem-form').addEventListener('submit', async event => {
-  event.preventDefault(); if (!backend || !$('#payment-checked').checked) return;
-  const button = event.currentTarget.querySelector('button'); button.disabled = true;
-  try { await backend.redeem($('#redeem-code').value); await renderDashboard(); $('#redeem-form').reset(); $('#dashboard-status').textContent = 'Retirada confirmada. Este ticket não poderá ser utilizado novamente.'; }
-  catch(error) { $('#dashboard-status').textContent = error.message; }
-  finally { button.disabled = false; }
 });
 document.addEventListener('click', event => {
   const button = event.target.closest('[data-ticket]'); if (!button) return;

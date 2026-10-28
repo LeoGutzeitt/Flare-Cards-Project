@@ -16,3 +16,9 @@ test('envio usa chave idempotente e rejeita falha do provedor', async () => {
   await assert.rejects(deliverWinnerEmail(job,config,async () => ({ok:false,status:429})),/HTTP 429/);
   assert.throws(() => buildWinnerEmail(job,config.from,''),/retirada/);
 });
+test('modelo escolhido gera anexo PNG e falha na imagem impede envio incompleto',async()=>{
+ let calls=0,payload;
+ await deliverWinnerEmail({...job,number:'006/165',template:'ouro'},{...config,renderTicket:async input=>{assert.equal(input.template,'ouro');assert.equal(input.number,'006/165');return 'iVBORw0KGgo=';}},async(url,options)=>{calls++;payload=JSON.parse(options.body);return {ok:true};});
+ assert.equal(calls,1);assert.equal(payload.attachments[0].filename,'flare-ticket.png');assert.equal(payload.attachments[0].content_type,'image/png');assert.match(payload.text,/006\/165/);
+ await assert.rejects(deliverWinnerEmail(job,{...config,renderTicket:async()=>{throw Error('Falha no renderizador');}},async()=>{calls++;return {ok:true};}),/renderizador/);assert.equal(calls,1);
+});

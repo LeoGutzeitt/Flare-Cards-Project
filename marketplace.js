@@ -1,3 +1,4 @@
+import {languageBadge} from './card-languages.js';
 import { setupCardDetails } from './card-details.js';
 import './app.js';
 import { products } from './store-catalog.js';
@@ -15,13 +16,15 @@ let filter = '', shelfGroups = [], renderVersion = 0;
 const shelfPages = new Map(), busyShelves = new Set();
 $('#collection-filters').innerHTML = ['',...collections].map(name=>`<button type="button" data-collection="${name}" aria-pressed="${!name}">${name || 'Todas as coleções'}</button>`).join('');
 function cardGroup(items,page) {
- return items.slice(page*3,page*3+3).map((item,index)=>`<article class="floating-card ${item.preview?'is-preview':''}" style="--card-order:${index}"><button type="button" class="floating-card-art" data-inspect="${item.id}" aria-label="Ver detalhes de ${escape(item.name)}"><img src="${escape(item.image)}" alt="${escape(item.name)} — ${escape(item.collection)}" loading="eager"><span class="floating-shadow" aria-hidden="true"></span><span class="inspect-card-hint">Ver detalhes ↗</span></button><div class="floating-card-info"><span>${item.preview?'PRÉVIA · SEM VENDA':escape(item.rarity)}</span><h4>${escape(item.name)}</h4>${item.preview?'<p>Exemplo visual da coleção</p>':`<strong>${money(item.price)}</strong><button class="add" data-add="${item.id}" aria-label="Adicionar ${escape(item.name)} ao carrinho">Adicionar +</button>`}</div></article>`).join('');
+ return items.slice(page*3,page*3+3).map((item,index)=>`<article class="floating-card ${item.preview?'is-preview':''}" style="--card-order:${index}"><button type="button" class="floating-card-art" data-inspect="${item.id}" aria-label="Ver detalhes de ${escape(item.name)}"><img src="${escape(item.image)}" alt="${escape(item.name)} — ${escape(item.collection)}" loading="eager"><span class="floating-shadow" aria-hidden="true"></span><span class="inspect-card-hint">Ver detalhes ↗</span></button><div class="floating-card-info"><span>${item.preview?'PRÉVIA · SEM VENDA':escape(item.rarity)}</span><h4>${escape(item.name)}</h4>${!item.preview?languageBadge(item.language):''}${item.preview?'<p>Exemplo visual da coleção</p>':`<strong>${money(item.price)}</strong><button class="add" data-add="${item.id}" aria-label="Adicionar ${escape(item.name)} ao carrinho">Adicionar +</button>`}</div></article>`).join('');
 }
 function renderShelves() {
  renderVersion++; busyShelves.clear(); shelfPages.clear();
- const query=normalize($('#market-search').value.trim());
- shelfGroups=collections.filter(name=>!filter || name===filter).map(name=>({name,items:displayCards.filter(item=>item.collection===name && normalize(`${item.name} ${item.collection} ${item.rarity}`).includes(query))})).filter(group=>group.items.length);
- $('#market-result').textContent = query || filter ? `${shelfGroups.reduce((sum,group)=>sum+group.items.length,0)} cartas e prévias encontradas` : 'Uma vitrine para explorar · 3 cartas à venda · prévias de catálogo identificadas';
+ const query=normalize($('#market-search').value.trim()),onlyAvailable=$('#market-available').checked,sort=$('#market-sort').value;
+ $('#market-clear').hidden=!query && !filter && !onlyAvailable && sort==='featured';
+ const order=(a,b)=>sort==='name'?a.name.localeCompare(b.name,'pt-BR'):sort.startsWith('price')?(Number(!!a.preview)-Number(!!b.preview) || (a.preview && b.preview?0:sort==='price-low'?a.price-b.price:b.price-a.price)):0;
+ shelfGroups=collections.filter(name=>!filter || name===filter).map(name=>({name,items:displayCards.filter(item=>item.collection===name && (!onlyAvailable || !item.preview && item.stock!==0) && normalize(`${item.name} ${item.collection} ${item.rarity}`).includes(query)).sort(order)})).filter(group=>group.items.length);
+ $('#market-result').textContent = query || filter || onlyAvailable ? `${shelfGroups.reduce((sum,group)=>sum+group.items.length,0)} ${onlyAvailable?'cartas à venda encontradas':'cartas e prévias encontradas'}` : `Uma vitrine para explorar · ${products.length} cartas à venda · prévias de catálogo identificadas`;
  $('#collection-shelves').innerHTML=shelfGroups.length ? shelfGroups.map(({name,items},index)=>{
   const set=pokemonCollections.find(item=>item.name===name), total=Math.ceil(items.length/3);
   shelfPages.set(index,0);
@@ -46,9 +49,12 @@ async function turnShelf(index,direction) {
   if(!reduced) await element.animate([{opacity:0,transform:`translateX(${direction*90}px) translateY(16px)`},{opacity:1,transform:'translateX(0) translateY(0)'}],{duration:470,easing:'cubic-bezier(.16,1,.3,1)'}).finished;
  } finally {if(version===renderVersion){busyShelves.delete(index);element.inert=false;updateControls(index);}}
 }
-$('#collection-shelves').addEventListener('click',event=>{const button=event.target.closest('[data-shelf]');if(button)turnShelf(Number(button.dataset.shelf),Number(button.dataset.step));if(event.target.closest('#clear-market-search')){filter='';$('#market-search').value='';document.querySelectorAll('[data-collection]').forEach(button=>button.setAttribute('aria-pressed',String(!button.dataset.collection)));renderShelves();}});
+$('#collection-shelves').addEventListener('click',event=>{const button=event.target.closest('[data-shelf]');if(button)turnShelf(Number(button.dataset.shelf),Number(button.dataset.step));if(event.target.closest('#clear-market-search')){filter='';$('#market-search').value='';$('#market-available').checked=false;$('#market-sort').value='featured';document.querySelectorAll('[data-collection]').forEach(button=>button.setAttribute('aria-pressed',String(!button.dataset.collection)));renderShelves();}});
 $('#collection-filters').addEventListener('click',event=>{const button=event.target.closest('[data-collection]');if(!button)return;filter=button.dataset.collection;document.querySelectorAll('[data-collection]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));renderShelves();});
 $('#market-search').addEventListener('input',renderShelves);
+$('#market-available').addEventListener('change',renderShelves);
+$('#market-sort').addEventListener('change',renderShelves);
+$('#market-clear').addEventListener('click',()=>{filter='';$('#market-search').value='';$('#market-available').checked=false;$('#market-sort').value='featured';document.querySelectorAll('[data-collection]').forEach(button=>button.setAttribute('aria-pressed',String(!button.dataset.collection)));renderShelves();});
 $('#mystery-toggle').addEventListener('click',()=>{const button=$('#mystery-toggle'),open=button.getAttribute('aria-expanded')!=='true';button.setAttribute('aria-expanded',String(open));$('#mystery-content').classList.toggle('is-collapsed',!open);$('#mystery-content').inert=!open;button.querySelector('.mystery-toggle-label').firstChild.textContent=open?'Recolher ':'Ver packs ';});
 
 renderShelves();

@@ -4,7 +4,7 @@ import { createAuth } from '../auth.js';
 import { createAuctionStore, validateAuctionImage } from '../auction-store.js';
 function memory() { const map = new Map(); return { getItem: key => map.get(key) ?? null, setItem: (key, value) => map.set(key, value), removeItem: key => map.delete(key) }; }
 test('login, senha inválida, sessão e papéis separados', async () => {
-  const data = memory(), session = memory(), auth = createAuth(data, session);
+  const data = memory(), session = memory(), auth = createAuth(data, session, {allowAdmin:true});
   assert.throws(() => auth.requireUser(), /Entre/);
   await auth.login('usuario_admin', '1234');
   assert.equal(auth.currentUser().role, 'admin');
@@ -17,7 +17,7 @@ test('login, senha inválida, sessão e papéis separados', async () => {
   assert.equal(auth.currentUser().role, 'user'); assert.throws(() => auth.requireUser('admin'), /administradores/);
 });
 test('somente admin cadastra/configura e somente usuário dá lance com identidade da sessão', async () => {
-  const data = memory(), auth = createAuth(data, memory());
+  const data = memory(), auth = createAuth(data, memory(), {allowAdmin:true});
   const store = createAuctionStore(data, () => 100000, role => auth.requireUser(role));
   const input = { name: '<Carta teste>', collection: 'Teste', collectionId: 'sv03.5', image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', opening: 1000, increment: 100, endsAt: 200000 };
   assert.throws(() => store.create(input), /Entre/);

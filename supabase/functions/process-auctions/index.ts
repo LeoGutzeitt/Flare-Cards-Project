@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import {renderTicketPng} from '../_shared/render-ticket.ts';
 import { deliverWinnerEmail } from '../_shared/winner-email.mjs';
 
 const required = (name: string) => { const value = Deno.env.get(name); if (!value) throw new Error(`Configure ${name}`); return value; };
@@ -27,7 +28,7 @@ Deno.serve(async request => {
     const batch = await rpc('claim_auction_notifications'); let sent = 0, failed = 0;
     for (const job of batch) {
       try {
-        await deliverWinnerEmail(job, { key: required('RESEND_API_KEY'), from: required('EMAIL_FROM'), instructions: required('PICKUP_INSTRUCTIONS') });
+        await deliverWinnerEmail(job, { key: required('RESEND_API_KEY'), from: required('EMAIL_FROM'), instructions: required('PICKUP_INSTRUCTIONS'),renderTicket:renderTicketPng });
         await rpc('complete_auction_notification',{notification_id:job.id,attempt_number:job.attempt,success:true}); sent++;
       } catch {
         failed++;
